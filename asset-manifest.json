@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/taetaefarm_control/static/css/main.1fd5bab8.css",
+    "main.js": "/taetaefarm_control/static/js/main.285f7e83.js",
+    "index.html": "/taetaefarm_control/index.html",
+    "main.1fd5bab8.css.map": "/taetaefarm_control/static/css/main.1fd5bab8.css.map",
+    "main.285f7e83.js.map": "/taetaefarm_control/static/js/main.285f7e83.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.1fd5bab8.css",
+    "static/js/main.285f7e83.js"
+  ]
+}
