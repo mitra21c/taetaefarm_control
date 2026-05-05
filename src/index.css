@@ -1,0 +1,33 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #f0f8ff;
+  color: #222;
+}
+
+button { font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+
+a { text-decoration: none; color: inherit; }
+
+/* react-big-calendar 스타일 보정 */
+.rbc-calendar {
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rbc-toolbar button {
+  border-radius: 8px !important;
+  border-color: #87CEEB !important;
+  color: #1565C0 !important;
+}
+.rbc-toolbar button.rbc-active {
+  background-color: #1565C0 !important;
+  color: #fff !important;
+}
+.rbc-today { background-color: #e3f2fd !important; }
+.rbc-header { background: #e3f2fd; color: #1565C0; font-weight: 600; padding: 6px; }
+.rbc-month-view { border-color: #bbdefb; }
+.rbc-event { border-radius: 6px !important; padding: 2px 6px; }
