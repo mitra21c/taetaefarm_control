@@ -1,9 +1,10 @@
 {
-  "buildCommand": "CI=false npm run build",
+  "buildCommand": "PUBLIC_URL=/ CI=false npm run build",
   "outputDirectory": "build",
   "installCommand": "npm install --legacy-peer-deps",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/handler" },
-    { "source": "/uploads/(.*)", "destination": "/api/handler" }
+    { "source": "/uploads/(.*)", "destination": "/api/handler" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
