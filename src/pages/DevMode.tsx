@@ -7,40 +7,111 @@ import { AlertModal } from '../components/Modal';
 const WS_URL = process.env.REACT_APP_WS_URL ?? 'ws://localhost:3001';
 
 function DbSection() {
-  const [users, setUsers] = useState<any[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [tables, setTables] = useState<string[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [loadingRows, setLoadingRows] = useState(false);
   const [alert, setAlert] = useState('');
-  const [popup, setPopup] = useState(false);
 
-  const fetch_ = async () => {
-    setLoading(true);
+  useEffect(() => {
+    setLoadingTables(true);
+    api.get('/api/dev/tables')
+      .then(r => setTables(r.data))
+      .catch(() => setAlert('테이블 목록 조회 실패'))
+      .finally(() => setLoadingTables(false));
+  }, []);
+
+  const fetchTable = async (name: string) => {
+    if (selected === name && rows !== null) { setSelected(null); setRows(null); return; }
+    setSelected(name);
+    setLoadingRows(true);
+    setRows(null);
     try {
-      const { data } = await api.get('/api/dev/users');
-      setUsers(data); setPopup(true);
-    } catch (e: any) { setAlert(e.response?.data?.message || '조회 실패'); }
-    finally { setLoading(false); }
+      const { data } = await api.get(`/api/dev/table/${name}`);
+      setRows(data);
+    } catch (e: any) { setAlert(e.response?.data?.message || '조회 실패'); setSelected(null); }
+    finally { setLoadingRows(false); }
   };
 
-  const cols = users && users.length > 0 ? Object.keys(users[0]) : [];
+  const cols = rows && rows.length > 0 ? Object.keys(rows[0]) : [];
+
   return (
     <div style={sec}>
       {alert && <AlertModal message={alert} onClose={() => setAlert('')} />}
       <h3 style={sh3}>DB 조회</h3>
-      <button onClick={fetch_} disabled={loading} style={btnP}>{loading ? '조회 중...' : '회원 조회'}</button>
-      {popup && users && (
-        <div style={overlay} onClick={() => setPopup(false)}>
-          <div style={popBox} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h4 style={{ color: '#1565C0' }}>회원 목록 ({users.length}명)</h4>
-              <button onClick={() => setPopup(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
-            </div>
-            <div style={{ overflow: 'auto', maxHeight: '70vh' }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead><tr>{cols.map(c => <th key={c} style={{ padding: '6px 10px', background: '#e3f2fd', color: '#1565C0', whiteSpace: 'nowrap', borderBottom: '1px solid #bbdefb' }}>{c}</th>)}</tr></thead>
-                <tbody>{users.map((u, i) => <tr key={i}>{cols.map(c => <td key={c} style={{ padding: '5px 10px', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>{u[c] == null ? '' : String(u[c])}</td>)}</tr>)}</tbody>
+
+      {loadingTables ? (
+        <p style={{ fontSize: 13, color: '#888' }}>테이블 목록 로딩 중...</p>
+      ) : tables.length === 0 ? (
+        <p style={{ fontSize: 13, color: '#aaa' }}>테이블 없음</p>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          {tables.map(t => (
+            <button
+              key={t}
+              onClick={() => fetchTable(t)}
+              disabled={loadingRows}
+              style={{
+                ...btnP,
+                background: selected === t ? '#0d47a1' : '#1565C0',
+                outline: selected === t ? '2px solid #90caf9' : 'none',
+                outlineOffset: 2,
+                opacity: loadingRows && selected !== t ? 0.55 : 1,
+                fontSize: 12,
+                padding: '6px 14px',
+              }}
+            >
+              {selected === t && loadingRows ? '조회 중...' : t}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div style={{ border: '1px solid #d0e8f8', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', background: '#e3f2fd' }}>
+            <span style={{ color: '#1565C0', fontWeight: 700, fontSize: 13 }}>
+              {selected}
+              {rows && (
+                <span style={{ fontWeight: 400, fontSize: 12, color: '#888', marginLeft: 10 }}>
+                  {rows.length}행{rows.length === 500 ? ' (최대 500)' : ''}
+                </span>
+              )}
+            </span>
+            <button onClick={() => { setSelected(null); setRows(null); }} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#78909c' }}>✕</button>
+          </div>
+
+          {loadingRows ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#888', fontSize: 13 }}>조회 중...</div>
+          ) : rows && rows.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>데이터 없음</div>
+          ) : rows ? (
+            <div style={{ overflow: 'auto', maxHeight: 420 }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...mth, background: '#b0bec5', color: '#37474f', position: 'sticky', top: 0 }}>#</th>
+                    {cols.map(c => <th key={c} style={{ ...mth, position: 'sticky', top: 0 }}>{c}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, i) => (
+                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f5faff' }}>
+                      <td style={{ ...mtd, color: '#bbb', textAlign: 'right', userSelect: 'none' }}>{i + 1}</td>
+                      {cols.map(c => (
+                        <td key={c} style={mtd}>
+                          {row[c] == null
+                            ? <span style={{ color: '#ccc' }}>NULL</span>
+                            : String(row[c])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
-          </div>
+          ) : null}
         </div>
       )}
     </div>

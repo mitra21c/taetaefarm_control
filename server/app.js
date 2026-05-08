@@ -373,6 +373,56 @@ app.delete('/api/sequence/:id', authMiddleware, managerMiddleware, async (req, r
 });
 
 // ── SCHEDULE ────────────────────────────────────────────────────
+// 시퀀스 그룹 일정 일괄 생성 (POST /api/schedule/sequence-batch)
+app.post('/api/schedule/sequence-batch', authMiddleware, managerMiddleware, async (req, res) => {
+  const { seq_grp_id, exec_datetime, repeat_type, use } = req.body;
+  if (!seq_grp_id || !exec_datetime) return res.status(400).json({ message: '시퀀스 그룹과 실행 일시를 입력해 주세요.' });
+  try {
+    const db = await getPool();
+    const seqs = (await db.request().input('grp_id', sql.Int, Number(seq_grp_id))
+      .query("SELECT * FROM sequence_info WHERE grp_id=@grp_id AND [use]='Y' ORDER BY start_gap")).recordset;
+    if (!seqs.length) return res.status(400).json({ message: '해당 그룹에 활성화된 시퀀스가 없습니다.' });
+    const base = new Date(exec_datetime);
+    for (const s of seqs) {
+      const execTime = new Date(base.getTime() + s.start_gap * 60 * 1000);
+      await db.request()
+        .input('name', sql.NVarChar, s.name)
+        .input('exec_datetime', sql.DateTime, execTime)
+        .input('repeat_type', sql.VarChar, repeat_type || 'none')
+        .input('seq_grp_id', sql.Int, Number(seq_grp_id))
+        .input('ctrl_id', sql.Int, s.plc_ctrl_id)
+        .input('use', sql.VarChar, use || 'Y')
+        .query('INSERT INTO schedule_info (name,exec_datetime,repeat_type,is_sequence,seq_grp_id,ctrl_id,[use]) VALUES (@name,@exec_datetime,@repeat_type,\'Y\',@seq_grp_id,@ctrl_id,@use)');
+    }
+    res.json({ message: `${seqs.length}개 시퀀스 일정이 추가되었습니다.` });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// 시퀀스 그룹 일정 일괄 업데이트 (PATCH /api/schedule/sequence-batch/:grpId)
+app.patch('/api/schedule/sequence-batch/:grpId', authMiddleware, managerMiddleware, async (req, res) => {
+  const { exec_datetime, repeat_type, use } = req.body;
+  const grpId = Number(req.params.grpId);
+  if (!exec_datetime) return res.status(400).json({ message: '실행 일시를 입력해 주세요.' });
+  try {
+    const db = await getPool();
+    const seqs = (await db.request().input('grp_id', sql.Int, grpId)
+      .query("SELECT * FROM sequence_info WHERE grp_id=@grp_id AND [use]='Y' ORDER BY start_gap")).recordset;
+    if (!seqs.length) return res.status(400).json({ message: '해당 그룹에 활성화된 시퀀스가 없습니다.' });
+    const base = new Date(exec_datetime);
+    for (const s of seqs) {
+      const execTime = new Date(base.getTime() + s.start_gap * 60 * 1000);
+      await db.request()
+        .input('grp_id', sql.Int, grpId)
+        .input('ctrl_id', sql.Int, s.plc_ctrl_id)
+        .input('exec_datetime', sql.DateTime, execTime)
+        .input('repeat_type', sql.VarChar, repeat_type || 'none')
+        .input('use', sql.VarChar, use || 'Y')
+        .query('UPDATE schedule_info SET exec_datetime=@exec_datetime,repeat_type=@repeat_type,[use]=@use,modified_at=GETDATE() WHERE seq_grp_id=@grp_id AND ctrl_id=@ctrl_id');
+    }
+    res.json({ message: '시퀀스 일정이 업데이트되었습니다.' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 app.get('/api/schedule', async (req, res) => {
   try { const db = await getPool(); res.json((await db.request().query('SELECT * FROM schedule_info ORDER BY exec_datetime')).recordset); }
   catch (err) { res.status(500).json({ message: err.message }); }
@@ -416,9 +466,27 @@ app.post('/api/sms/send-all', authMiddleware, adminMiddleware, async (req, res) 
 });
 
 // ── 개발자 모드 ─────────────────────────────────────────────────
-app.get('/api/dev/users', authMiddleware, adminMiddleware, async (req, res) => {
-  try { const db = await getPool(); res.json((await db.request().query('SELECT * FROM users ORDER BY id')).recordset); }
-  catch (err) { res.status(500).json({ message: err.message }); }
+app.get('/api/dev/tables', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const db = await getPool();
+    const result = await db.request().query(
+      "SELECT name FROM sys.objects WHERE type='U' ORDER BY name"
+    );
+    res.json(result.recordset.map(r => r.name));
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.get('/api/dev/table/:tableName', authMiddleware, adminMiddleware, async (req, res) => {
+  const { tableName } = req.params;
+  try {
+    const db = await getPool();
+    const check = await db.request()
+      .input('tname', sql.NVarChar, tableName)
+      .query("SELECT name FROM sys.objects WHERE type='U' AND name=@tname");
+    if (!check.recordset.length) return res.status(404).json({ message: '테이블을 찾을 수 없습니다.' });
+    const result = await db.request().query(`SELECT TOP 500 * FROM [${tableName}] ORDER BY (SELECT NULL)`);
+    res.json(result.recordset);
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 module.exports = { app, ensureDatabase, initDb };
