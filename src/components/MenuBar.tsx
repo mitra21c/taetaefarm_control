@@ -9,12 +9,13 @@ const BUILD_VERSION = (() => {
 })();
 
 export default function MenuBar() {
-  const { isAdmin, isManager } = useAuth();
+  const { isAdmin, isManager, user } = useAuth();
 
   const menus = [
     { to: '/farm-status', label: '농장 현황', always: true },
     { to: '/control',     label: '제어 정보',  always: false, show: isManager },
     { to: '/schedule',    label: '일정 관리',  always: false, show: isManager },
+    { to: '/order',       label: '주문',       always: false, show: !!user },
     { to: '/crop-price',  label: '작물 가격',  always: false, show: isManager },
     { to: '/monitoring',  label: '모니터링',   always: true },
     { to: '/members',     label: '회원 정보',  always: false, show: isAdmin },

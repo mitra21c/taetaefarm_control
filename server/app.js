@@ -98,19 +98,33 @@ async function initDb() {
        [use] VARCHAR(1) NOT NULL DEFAULT 'Y', created_at DATETIME NOT NULL DEFAULT GETDATE(), modified_at DATETIME NOT NULL DEFAULT GETDATE())`,
     `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='crop_prices' AND xtype='U')
      CREATE TABLE crop_prices (id INT IDENTITY(1,1) PRIMARY KEY, name NVARCHAR(50) NOT NULL,
-       weight NVARCHAR(100) NOT NULL DEFAULT '', price INT NOT NULL DEFAULT 0,
-       available VARCHAR(1) NOT NULL DEFAULT 'Y',
+       weight NVARCHAR(100) NOT NULL DEFAULT '1Kg', price INT NOT NULL DEFAULT 10000,
+       available VARCHAR(1) NOT NULL DEFAULT 'N',
        modified_at DATETIME NOT NULL DEFAULT GETDATE())`,
+    `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='orders' AND xtype='U')
+     CREATE TABLE orders (id INT IDENTITY(1,1) PRIMARY KEY,
+       crop_id INT NOT NULL, crop_name NVARCHAR(50) NOT NULL,
+       weight NVARCHAR(100) NOT NULL DEFAULT '', price INT NOT NULL DEFAULT 0,
+       quantity INT NOT NULL DEFAULT 1,
+       orderer_name NVARCHAR(50) NOT NULL, phone VARCHAR(20) NOT NULL,
+       address NVARCHAR(200) NOT NULL DEFAULT '',
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       created_at DATETIME NOT NULL DEFAULT GETDATE())`,
   ];
   for (const q of tables) await db.request().query(q);
 
-  const cropCheck = await db.request().query("SELECT COUNT(*) AS cnt FROM crop_prices");
-  if (cropCheck.recordset[0].cnt === 0) {
-    for (const name of ['블루베리', '태추', '대봉', '울금']) {
-      await db.request().input('name', sql.NVarChar, name)
-        .query("INSERT INTO crop_prices (name) VALUES (@name)");
+  // 미설정(weight='') 기존 행 기본값 보정
+  await db.request().query(
+    "UPDATE crop_prices SET weight='1Kg', price=10000, available='N' WHERE weight='' OR weight IS NULL"
+  );
+  // 5개 작물 누락 시 개별 삽입
+  for (const name of ['블루베리', '태추', '대봉', '울금', '감 말랭이']) {
+    const chk = await db.request().input('n', sql.NVarChar, name)
+      .query("SELECT id FROM crop_prices WHERE name=@n");
+    if (!chk.recordset.length) {
+      await db.request().input('n', sql.NVarChar, name)
+        .query("INSERT INTO crop_prices (name,weight,price,available) VALUES (@n,'1Kg',10000,'N')");
     }
-    console.log('crop_prices 기본 데이터 생성 완료');
   }
 
   const userCheck = await db.request().query('SELECT COUNT(*) AS cnt FROM users');
@@ -480,7 +494,7 @@ app.post('/api/sms/send-all', authMiddleware, adminMiddleware, async (req, res) 
 });
 
 // ── 작물 가격 ────────────────────────────────────────────────────
-app.get('/api/crop-prices', authMiddleware, managerMiddleware, async (req, res) => {
+app.get('/api/crop-prices', authMiddleware, async (req, res) => {
   try {
     const db = await getPool();
     const result = await db.request().query('SELECT * FROM crop_prices ORDER BY id');
@@ -502,6 +516,36 @@ app.put('/api/crop-prices/:id', authMiddleware, managerMiddleware, async (req, r
     const result = await db.request().input('id', sql.Int, Number(id))
       .query('SELECT * FROM crop_prices WHERE id=@id');
     res.json(result.recordset[0]);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ── 주문 ────────────────────────────────────────────────────────
+app.post('/api/orders', authMiddleware, async (req, res) => {
+  const { crop_id, orderer_name, phone, quantity, address } = req.body;
+  if (!crop_id || !orderer_name?.trim() || !phone?.trim())
+    return res.status(400).json({ message: '필수 항목(상품, 주문자명, 연락처)을 입력해주세요.' });
+  try {
+    const db = await getPool();
+    const cropRes = await db.request().input('id', sql.Int, Number(crop_id))
+      .query('SELECT * FROM crop_prices WHERE id=@id');
+    if (!cropRes.recordset.length)
+      return res.status(404).json({ message: '상품을 찾을 수 없습니다.' });
+    const c = cropRes.recordset[0];
+    if (c.available !== 'Y')
+      return res.status(400).json({ message: '구매 불가능한 상품입니다.' });
+    const result = await db.request()
+      .input('crop_id',      sql.Int,       Number(crop_id))
+      .input('crop_name',    sql.NVarChar,  c.name)
+      .input('weight',       sql.NVarChar,  c.weight)
+      .input('price',        sql.Int,       c.price)
+      .input('quantity',     sql.Int,       Number(quantity) || 1)
+      .input('orderer_name', sql.NVarChar,  orderer_name.trim())
+      .input('phone',        sql.VarChar,   phone.trim())
+      .input('address',      sql.NVarChar,  address?.trim() || '')
+      .query(`INSERT INTO orders (crop_id,crop_name,weight,price,quantity,orderer_name,phone,address)
+              VALUES (@crop_id,@crop_name,@weight,@price,@quantity,@orderer_name,@phone,@address);
+              SELECT SCOPE_IDENTITY() AS id`);
+    res.status(201).json({ id: result.recordset[0].id, message: '주문이 접수되었습니다.' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

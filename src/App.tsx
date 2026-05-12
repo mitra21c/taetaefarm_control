@@ -15,6 +15,7 @@ import Monitoring from './pages/Monitoring';
 import Members from './pages/Members';
 import DevMode from './pages/DevMode';
 import CropPrice from './pages/CropPrice';
+import Order from './pages/Order';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/control"     element={<Layout><ControlInfo /></Layout>} />
             <Route path="/schedule"    element={<Layout><Schedule /></Layout>} />
             <Route path="/monitoring"  element={<Layout><Monitoring /></Layout>} />
+            <Route path="/order"       element={<Layout><Order /></Layout>} />
             <Route path="/crop-price"  element={<Layout><CropPrice /></Layout>} />
             <Route path="/members"     element={<Layout><Members /></Layout>} />
             <Route path="/dev"         element={<Layout><DevMode /></Layout>} />
