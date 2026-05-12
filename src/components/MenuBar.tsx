@@ -15,6 +15,7 @@ export default function MenuBar() {
     { to: '/farm-status', label: '농장 현황', always: true },
     { to: '/control',     label: '제어 정보',  always: false, show: isManager },
     { to: '/schedule',    label: '일정 관리',  always: false, show: isManager },
+    { to: '/crop-price',  label: '작물 가격',  always: false, show: isManager },
     { to: '/monitoring',  label: '모니터링',   always: true },
     { to: '/members',     label: '회원 정보',  always: false, show: isAdmin },
     { to: '/dev',         label: '개발자모드', always: false, show: isAdmin },

@@ -96,8 +96,22 @@ async function initDb() {
        exec_datetime DATETIME NOT NULL, repeat_type VARCHAR(20) NOT NULL DEFAULT 'none',
        is_sequence VARCHAR(1) NOT NULL DEFAULT 'N', seq_grp_id INT DEFAULT NULL,
        [use] VARCHAR(1) NOT NULL DEFAULT 'Y', created_at DATETIME NOT NULL DEFAULT GETDATE(), modified_at DATETIME NOT NULL DEFAULT GETDATE())`,
+    `IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='crop_prices' AND xtype='U')
+     CREATE TABLE crop_prices (id INT IDENTITY(1,1) PRIMARY KEY, name NVARCHAR(50) NOT NULL,
+       weight NVARCHAR(100) NOT NULL DEFAULT '', price INT NOT NULL DEFAULT 0,
+       available VARCHAR(1) NOT NULL DEFAULT 'Y',
+       modified_at DATETIME NOT NULL DEFAULT GETDATE())`,
   ];
   for (const q of tables) await db.request().query(q);
+
+  const cropCheck = await db.request().query("SELECT COUNT(*) AS cnt FROM crop_prices");
+  if (cropCheck.recordset[0].cnt === 0) {
+    for (const name of ['블루베리', '태추', '대봉', '울금']) {
+      await db.request().input('name', sql.NVarChar, name)
+        .query("INSERT INTO crop_prices (name) VALUES (@name)");
+    }
+    console.log('crop_prices 기본 데이터 생성 완료');
+  }
 
   const userCheck = await db.request().query('SELECT COUNT(*) AS cnt FROM users');
   if (userCheck.recordset[0].cnt === 0) {
@@ -463,6 +477,32 @@ app.post('/api/sms/send-all', authMiddleware, adminMiddleware, async (req, res) 
     await solapi.sendMany(users.map(u => ({ to: u.phone.replace(/-/g, ''), from: SOLAPI_SENDER, text })));
     res.json({ history: users });
   } catch (err) { res.status(500).json({ message: '전송 실패: ' + err.message }); }
+});
+
+// ── 작물 가격 ────────────────────────────────────────────────────
+app.get('/api/crop-prices', authMiddleware, managerMiddleware, async (req, res) => {
+  try {
+    const db = await getPool();
+    const result = await db.request().query('SELECT * FROM crop_prices ORDER BY id');
+    res.json(result.recordset);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put('/api/crop-prices/:id', authMiddleware, managerMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { weight, price, available } = req.body;
+  try {
+    const db = await getPool();
+    await db.request()
+      .input('id', sql.Int, Number(id))
+      .input('weight', sql.NVarChar, weight ?? '')
+      .input('price', sql.Int, Number(price) || 0)
+      .input('available', sql.VarChar, available === 'Y' ? 'Y' : 'N')
+      .query('UPDATE crop_prices SET weight=@weight, price=@price, available=@available, modified_at=GETDATE() WHERE id=@id');
+    const result = await db.request().input('id', sql.Int, Number(id))
+      .query('SELECT * FROM crop_prices WHERE id=@id');
+    res.json(result.recordset[0]);
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // ── 개발자 모드 ─────────────────────────────────────────────────
